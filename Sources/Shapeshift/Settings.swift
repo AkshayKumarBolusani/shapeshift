@@ -34,6 +34,8 @@ enum TriggerKey: String, CaseIterable, Identifiable {
     }
 }
 
+extension Notification.Name { static let menuBarIconChanged = Notification.Name("ShapeshiftMenuBarIconChanged") }
+
 final class Settings: ObservableObject {
     static let shared = Settings()
     private let d = UserDefaults.standard
@@ -47,6 +49,9 @@ final class Settings: ObservableObject {
     @Published var pdfDPI: Double { didSet { d.set(pdfDPI, forKey: "pdfDPI") } }
     @Published var dragTriggerEnabled: Bool { didSet { d.set(dragTriggerEnabled, forKey: "dragTriggerEnabled") } }
     @Published var revealAfterConvert: Bool { didSet { d.set(revealAfterConvert, forKey: "revealAfterConvert") } }
+    @Published var showMenuBarIcon: Bool { didSet { d.set(showMenuBarIcon, forKey: "showMenuBarIcon"); NotificationCenter.default.post(name: .menuBarIconChanged, object: nil) } }
+    @Published var hotKeyEnabled: Bool { didSet { d.set(hotKeyEnabled, forKey: "hotKeyEnabled") } }
+    @Published var showToasts: Bool { didSet { d.set(showToasts, forKey: "showToasts") } }
 
     private init() {
         convertKey = TriggerKey(rawValue: d.string(forKey: "convertKey") ?? "") ?? .shift
@@ -58,6 +63,9 @@ final class Settings: ObservableObject {
         pdfDPI = d.object(forKey: "pdfDPI") as? Double ?? 300
         dragTriggerEnabled = d.object(forKey: "dragTriggerEnabled") as? Bool ?? true
         revealAfterConvert = d.object(forKey: "revealAfterConvert") as? Bool ?? false
+        showMenuBarIcon = d.object(forKey: "showMenuBarIcon") as? Bool ?? true
+        hotKeyEnabled = d.object(forKey: "hotKeyEnabled") as? Bool ?? true
+        showToasts = d.object(forKey: "showToasts") as? Bool ?? true
     }
 
     func wheel(for flags: NSEvent.ModifierFlags) -> WheelKind? {
@@ -67,70 +75,6 @@ final class Settings: ObservableObject {
         return nil
     }
 }
-
-struct SettingsView: View {
-    @ObservedObject var s = Settings.shared
-
-    var body: some View {
-        Form {
-            Section("Wheel keys (tap while dragging a file)") {
-                Picker("Convert", selection: $s.convertKey) { ForEach(TriggerKey.allCases) { Text($0.symbol).tag($0) } }
-                Picker("Tools", selection: $s.toolsKey) { ForEach(TriggerKey.allCases) { Text($0.symbol).tag($0) } }
-                Picker("Actions", selection: $s.actionsKey) { ForEach(TriggerKey.allCases) { Text($0.symbol).tag($0) } }
-                Toggle("Open wheels while dragging files", isOn: $s.dragTriggerEnabled)
-                Text("Keyboard: select files in Finder and press ⌃⌥Space.").font(.caption).foregroundStyle(.secondary)
-            }
-            Section("Output") {
-                Picker("Save results", selection: $s.outputLocation) { ForEach(OutputLocation.allCases) { Text($0.label).tag($0) } }
-                    .onChange(of: s.outputLocation) { v in if v == .custom { chooseFolder() } }
-                if s.outputLocation == .custom {
-                    HStack {
-                        Text(s.customOutputPath ?? "None").lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Choose…") { chooseFolder() }
-                    }
-                }
-                Toggle("Reveal result in Finder", isOn: $s.revealAfterConvert)
-            }
-            Section("Quality") {
-                HStack { Text("JPEG / HEIC / WebP quality"); Slider(value: $s.jpegQuality, in: 0.3...1.0); Text("\(Int(s.jpegQuality * 100))%").frame(width: 40) }
-                Picker("PDF → image resolution", selection: $s.pdfDPI) {
-                    Text("150 DPI").tag(150.0); Text("300 DPI").tag(300.0); Text("600 DPI").tag(600.0)
-                }
-            }
-            Section("Engines") {
-                engineRow("ffmpeg (audio & video)", Tools.ffmpeg, install: "brew install ffmpeg")
-                engineRow("cwebp (WebP export)", Tools.cwebp, install: "brew install webp")
-                engineRow("LibreOffice (slides, XLS, ODS)", Tools.soffice, install: "brew install --cask libreoffice")
-                Text("After installing, quit and reopen Shapeshift.").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-        .frame(width: 520, height: 560)
-    }
-
-    private func engineRow(_ name: String, _ path: String?, install: String) -> some View {
-        HStack {
-            Image(systemName: path == nil ? "xmark.circle" : "checkmark.circle.fill").foregroundStyle(path == nil ? .red : .green)
-            Text(name)
-            Spacer()
-            if path == nil {
-                Button("Install…") { Installer.run(install) }
-            } else {
-                Text("installed").font(.caption).foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func chooseFolder() {
-        let p = NSOpenPanel()
-        p.canChooseDirectories = true
-        p.canChooseFiles = false
-        p.canCreateDirectories = true
-        if p.runModal() == .OK, let url = p.url { s.customOutputPath = url.path } else if s.customOutputPath == nil { s.outputLocation = .besideOriginal }
-    }
-}
-
 
 /// Opens Terminal with a Homebrew install command (or the Homebrew site if brew is missing).
 enum Installer {

@@ -3,7 +3,7 @@ import AppKit
 enum Runner {
     static func run(_ op: Operation, files rawFiles: [URL]) {
         let files = rawFiles.map(\.realFileURL)
-        if !op.silent { Toast.progress("\(op.title)… \(files.count == 1 ? files[0].lastPathComponent : "\(files.count) files")") }
+        if !op.silent && Settings.shared.showToasts { Toast.progress("\(op.title)… \(files.count == 1 ? files[0].lastPathComponent : "\(files.count) files")") }
         Task {
             do {
                 let outs = try await op.run(files)
@@ -11,7 +11,7 @@ enum Runner {
                     guard !op.silent else { return }
                     History.add(outs)
                     let name = outs.count == 1 ? outs[0].lastPathComponent : "\(outs.count) files"
-                    Toast.show("Saved \(name)", reveal: outs)
+                    if Settings.shared.showToasts { Toast.show("Saved \(name)", reveal: outs) }
                     if Settings.shared.revealAfterConvert, !outs.isEmpty { NSWorkspace.shared.activateFileViewerSelecting(outs) }
                 }
             } catch is CancellationError {
@@ -24,10 +24,9 @@ enum Runner {
 }
 
 enum History {
-    private(set) static var items: [URL] = []
+    static var items: [URL] { HistoryStore.shared.items }
     static func add(_ urls: [URL]) {
-        items.insert(contentsOf: urls, at: 0)
-        items = Array(items.prefix(15))
+        HistoryStore.shared.add(urls)
         NotificationCenter.default.post(name: .historyChanged, object: nil)
     }
 }

@@ -3,7 +3,7 @@ import SwiftUI
 
 @MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
-    private var settingsWindow: NSWindow?
+    private var unusedWindow: NSWindow?
     private let recentMenu = NSMenu()
 
     func applicationDidFinishLaunching(_ note: Notification) {
@@ -23,21 +23,31 @@ import SwiftUI
         recent.submenu = recentMenu
         menu.addItem(.separator())
         menu.addItem(withTitle: "How to Use", action: #selector(showHelp), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Customize Wheels…", action: #selector(openFeatures), keyEquivalent: "").target = self
+        menu.addItem(withTitle: "Open Shapeshift…", action: #selector(openMain), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Shapeshift", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         statusItem.menu = menu
+        applyMenuBarIcon()
+        NotificationCenter.default.addObserver(forName: .menuBarIconChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyMenuBarIcon() }
+        }
 
         DragMonitor.shared.start()
-        HotKey.shared.handler = { [weak self] in self?.finderSelection() }
+        HotKey.shared.handler = { [weak self] in if Settings.shared.hotKeyEnabled { self?.finderSelection() } }
         HotKey.shared.register()
 
         if Tools.ffmpeg == nil && UserDefaults.standard.bool(forKey: "welcomed") == false {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { self.offerFFmpeg() }
         }
-        if !UserDefaults.standard.bool(forKey: "welcomed") {
-            UserDefaults.standard.set(true, forKey: "welcomed")
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.showHelp() }
+        let firstRun = !UserDefaults.standard.bool(forKey: "welcomed")
+        UserDefaults.standard.set(true, forKey: "welcomed")
+        // Opening the app yourself shows the window; starting at login stays quietly in the menu bar.
+        if !launchedAsLoginItem {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { MainWindow.shared.show(firstRun ? .guide : nil) }
+        }
+        if false {
         }
     }
 
@@ -77,17 +87,21 @@ import SwiftUI
         WheelController.shared.show(files: files, kind: .convert, mode: .click)
     }
 
-    @objc private func openSettings() {
-        if settingsWindow == nil {
-            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            w.title = "Shapeshift Settings"
-            w.styleMask = [.titled, .closable]
-            w.isReleasedWhenClosed = false
-            settingsWindow = w
-        }
-        NSApp.activate(ignoringOtherApps: true)
-        settingsWindow?.center()
-        settingsWindow?.makeKeyAndOrderFront(nil)
+    @objc private func openSettings() { MainWindow.shared.show(.general) }
+    @objc private func openMain() { MainWindow.shared.show() }
+    @objc private func openFeatures() { MainWindow.shared.show(.features) }
+
+    /// Clicking the app in Finder/Dock/Spotlight while it's running opens the window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MainWindow.shared.show()
+        return true
+    }
+
+    private func applyMenuBarIcon() { statusItem.isVisible = Settings.shared.showMenuBarIcon }
+
+    private var launchedAsLoginItem: Bool {
+        guard let e = NSAppleEventManager.shared().currentAppleEvent else { return false }
+        return e.eventID == kAEOpenApplication && e.paramDescriptor(forKeyword: keyAEPropData)?.enumCodeValue == keyAELaunchedAsLogInItem
     }
 
     private func offerFFmpeg() {
@@ -132,8 +146,26 @@ import SwiftUI
 // CLI: Shapeshift --run <convert|tools|actions> "<Wedge title>" file1 [file2…]
 //      Shapeshift --list <convert|tools|actions> file
 let args = CommandLine.arguments
-if args.count >= 4, ["--run", "--list", "--snapshot"].contains(args[1]) {
+if args.count >= 4, ["--run", "--list", "--snapshot", "--snapshot-page"].contains(args[1]) {
     let kind: WheelKind = ["convert": .convert, "tools": .tools, "actions": .actions][args[2]] ?? .convert
+    if args[1] == "--snapshot-page" {
+        // Shapeshift --snapshot-page <page> <out.png> [dark]: render the main window offscreen.
+        MainActor.assumeIsolated {
+            _ = NSApplication.shared
+            NSApp.appearance = NSAppearance(named: args.count > 4 && args[4] == "dark" ? .darkAqua : .aqua)
+            let nav = MainWindow.NavState()
+            nav.page = MainWindow.Page(rawValue: args[2]) ?? .features
+            let host = NSHostingView(rootView: MainView(nav: nav))
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1000, height: 640), styleMask: [.titled], backing: .buffered, defer: false)
+            w.contentView = host
+            w.layoutIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(1.0))
+            let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds)!
+            host.cacheDisplay(in: host.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: args[3]))
+        }
+        exit(0)
+    }
     if args[1] == "--snapshot", args.count >= 5 {
         // Shapeshift --snapshot <kind> <file> <out.png>: render the wheel to an image.
         MainActor.assumeIsolated {

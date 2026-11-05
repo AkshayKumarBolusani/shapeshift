@@ -32,6 +32,17 @@ Shapeshift lives in your menu bar. Start dragging any file, from Finder, the Des
 - **Keyboard:** select files in Finder and press **⌃⌥Space**. Use the arrows to choose, ↩ to run, Tab to switch wheel, 1–9 to pick directly and Esc to cancel.
 - All keys and the save location can be changed in **Settings**.
 
+## The Shapeshift window
+
+Click the Shapeshift app icon (or **Open Shapeshift…** in the menu bar) to open its window:
+
+- **Wheel Features:** turn any wedge on or off and drag to reorder, per file type and per wheel, with a live preview. Reset one wheel or everything.
+- **General:** wheel keys, the ⌃⌥Space shortcut, where results are saved, pop-ups, the menu bar icon and open at login.
+- **Quality:** image quality and PDF → image resolution.
+- **Engines:** see what's installed and install ffmpeg, WebP or LibreOffice with one click.
+- **History:** every file you've made, with Open and Show in Finder.
+- **How to Use** and **About**.
+
 Everything happens **on your Mac**. There are no uploads, no account, no tracking and no internet needed.
 
 ## Install

@@ -42,10 +42,35 @@ enum Category {
         default: return .other
         }
     }
+
+    /// Stable name used to store customization.
+    var key: String {
+        switch self {
+        case .image, .svg: return "image"
+        case .audio: return "audio"
+        case .video: return "video"
+        case .pdf: return "pdf"
+        case .document: return "document"
+        case .markdown: return "markdown"
+        case .slides: return "slides"
+        case .sheet: return "sheet"
+        case .subtitle: return "subtitle"
+        case .archive: return "archive"
+        case .folder: return "folder"
+        case .other: return "other"
+        }
+    }
 }
 
 enum Catalog {
+    /// Wedges for these files, after the user's on/off and order choices.
     static func operations(for files: [URL], kind: WheelKind) -> [Operation] {
+        let key = kind == .actions ? "any" : (commonCategory(files)?.key ?? "mixed")
+        return Customization.shared.apply(allOperations(for: files, kind: kind), kind: kind, category: key)
+    }
+
+    /// Every wedge that could apply, ignoring customization.
+    static func allOperations(for files: [URL], kind: WheelKind) -> [Operation] {
         guard !files.isEmpty else { return [] }
         switch kind {
         case .actions: return FileActions.all()
@@ -54,7 +79,7 @@ enum Catalog {
         }
     }
 
-    private static func commonCategory(_ files: [URL]) -> Category? {
+    static func commonCategory(_ files: [URL]) -> Category? {
         let cats = Set(files.map { Category.of($0) == .svg ? .image : Category.of($0) })
         return cats.count == 1 ? cats.first : nil
     }

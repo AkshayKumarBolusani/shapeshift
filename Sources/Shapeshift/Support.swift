@@ -25,6 +25,8 @@ enum Tools {
         return found
     }
 
+    static func refresh() { lock.lock(); cache = [:]; lock.unlock() }
+
     static var ffmpeg: String? { path("ffmpeg") }
     static var ffprobe: String? { path("ffprobe") }
     static var cwebp: String? { path("cwebp") }
