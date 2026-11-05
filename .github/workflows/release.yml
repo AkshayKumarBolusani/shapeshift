@@ -1,0 +1,36 @@
+name: Release
+
+# Push a tag like v1.0.1 to build the app and publish a GitHub Release with the DMG.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: echo "${GITHUB_REF_NAME#v}" > VERSION
+      - name: Build app and DMG
+        run: ./build.sh --dmg
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Shapeshift
+          path: |
+            build/*.dmg
+            build/*.zip
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/*.dmg
+            build/*.zip
+          generate_release_notes: true
